@@ -11,12 +11,14 @@
  *   *      *
  *   |      |
  *   n1     n2
+ *  **********
+ *  Note:
+ *  **********
+ *  1. TCP Delayed ACK has been made as a configurable parameter. Set it to 0 ms for instant TCP ACKs.
+ *  2. TCP server is now connected to the WiFi AP through a P2P node. The delay of this link should be half of the RTT. 
  *  
- *  TCP Delayed ACK has been made as a configurable parameter. Set it to 0 ms for instant TCP ACKs.
- * 
  *  To Do:
- *  1. Move the TCP server behind a P2P link.
- *  2. Make the delay of the P2P link as a random variable - a normal variable. Keep the mean and variance as configurable parameters.
+ *  1. Make the delay of the P2P link as a random variable - a normal variable. Keep the mean and variance as configurable parameters.
  * 
  * In this example, an HT station sends TCP packets to the access point.
  * We report the total throughput received during a window of 100ms.
@@ -44,8 +46,9 @@
 //changes below
 #include "ns3/netanim-module.h"
 #include "ns3/wifi-module.h"
+#include "ns3/point-to-point-module.h"
 //*********************************
-#define LOGNAME_PREFIX "TCP_1sec_Jan02_2020"
+#define LOGNAME_PREFIX "TCP_1sec_Jan03_2020"
 NS_LOG_COMPONENT_DEFINE ("energyModelWiFiTCP");
 
 using namespace ns3;
@@ -56,6 +59,7 @@ uint64_t lastTotalRx = 0;                     /* The value of the last total rec
 uint32_t payloadSize = 1000;                       /* Transport layer payload size in bytes. */
 uint32_t dataPeriod = 1;                       /* Application data period in seconds. */
 uint32_t delACKTimer_ms = 0;                     /* TCP delayed ACK timer in ms   */ 
+uint32_t P2PLinkDelay_ms = 10;                  // Set this to be half of the expected RTT
 double simulationTime = 20;                        /* Simulation time in seconds. */
 //*******************************************************************
 void
@@ -135,42 +139,60 @@ main (int argc, char *argv[])
                                       "NonUnicastMode", StringValue ("ErpOfdmRate6Mbps"));
 
   NodeContainer networkNodes;
-  networkNodes.Create (2);
+  networkNodes.Create (3);
   Ptr<Node> apWifiNode = networkNodes.Get (0);
   Ptr<Node> staWifiNode = networkNodes.Get (1);
+  Ptr<Node> TCPServerNode = networkNodes.Get (2);
 
+  
+  // Setup P2P nodes
+
+  NodeContainer P2PNodes;
+  P2PNodes.Add(apWifiNode);
+  P2PNodes.Add(TCPServerNode);
+
+  PointToPointHelper pointToPoint;
+  std::stringstream delayString;
+  delayString<<P2PLinkDelay_ms <<"ms";
+  pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("1000Mbps"));
+  pointToPoint.SetChannelAttribute ("Delay", StringValue (delayString.str()));
+
+  NetDeviceContainer P2Pdevices;
+  P2Pdevices = pointToPoint.Install (P2PNodes);
   /* Configure AP */
   Ssid ssid = Ssid ("network");
   wifiMac.SetType ("ns3::ApWifiMac",
                    "Ssid", SsidValue (ssid));
 
-  NetDeviceContainer apDevice;
-  apDevice = wifiHelper.Install (wifiPhy, wifiMac, apWifiNode);
+  NetDeviceContainer apWiFiDevice;
+  apWiFiDevice = wifiHelper.Install (wifiPhy, wifiMac, apWifiNode);
 
 
   // Adding basic modes to AP - use this to change beacon data rates
 
-  Ptr<WifiRemoteStationManager> apStationManager = DynamicCast<WifiNetDevice>(apDevice.Get (0))->GetRemoteStationManager ();
+  Ptr<WifiRemoteStationManager> apStationManager = DynamicCast<WifiNetDevice>(apWiFiDevice.Get (0))->GetRemoteStationManager ();
   apStationManager->AddBasicMode (WifiMode ("ErpOfdmRate6Mbps"));
-  //DynamicCast<WifiNetDevice>(apDevice.Get (0))->GetRemoteStationManager ()->AddBasicMode (WifiMode ("ErpOfdmRate6Mbps"));
+  //DynamicCast<WifiNetDevice>(apWiFiDevice.Get (0))->GetRemoteStationManager ()->AddBasicMode (WifiMode ("ErpOfdmRate6Mbps"));
 
   /* Configure STA */
   wifiMac.SetType ("ns3::StaWifiMac",
                    "Ssid", SsidValue (ssid));
 
-  NetDeviceContainer staDevices;
-  staDevices = wifiHelper.Install (wifiPhy, wifiMac, staWifiNode);
+  NetDeviceContainer staWiFiDevice;
+  staWiFiDevice = wifiHelper.Install (wifiPhy, wifiMac, staWifiNode);
 
   /* Mobility model */
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   positionAlloc->Add (Vector (0.0, 0.0, 0.0));
   positionAlloc->Add (Vector (10.0, 0.0, 0.0));
+  positionAlloc->Add (Vector (-100.0, 0.0, 0.0));
 
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (apWifiNode);
   mobility.Install (staWifiNode);
+  mobility.Install(TCPServerNode);
 
 
   
@@ -181,20 +203,24 @@ main (int argc, char *argv[])
   Ipv4AddressHelper address;
   address.SetBase ("10.0.0.0", "255.255.255.0");
   Ipv4InterfaceContainer apInterface;
-  apInterface = address.Assign (apDevice);
+  apInterface = address.Assign (apWiFiDevice);
   Ipv4InterfaceContainer staInterface;
-  staInterface = address.Assign (staDevices);
+  staInterface = address.Assign (staWiFiDevice);
+  address.SetBase ("10.1.1.0", "255.255.255.0");
+  Ipv4InterfaceContainer P2PInterfaces;
+  P2PInterfaces = address.Assign (P2Pdevices);
+
 
   /* Populate routing table */
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 
-  /* Install TCP Receiver on the access point */
+  /* Install TCP Receiver on the P2P TCP server */
   PacketSinkHelper sinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), 9));
-  ApplicationContainer sinkApp = sinkHelper.Install (apWifiNode);
+  ApplicationContainer sinkApp = sinkHelper.Install (TCPServerNode);
   sink = StaticCast<PacketSink> (sinkApp.Get (0));
 
   /* Install TCP/UDP Transmitter on the station */
-  OnOffHelper server ("ns3::TcpSocketFactory", (InetSocketAddress (apInterface.GetAddress (0), 9)));
+  OnOffHelper server ("ns3::TcpSocketFactory", (InetSocketAddress (P2PInterfaces.GetAddress (1), 9)));
   server.SetAttribute ("PacketSize", UintegerValue (payloadSize));
   server.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
   server.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
@@ -212,12 +238,14 @@ main (int argc, char *argv[])
   /* Enable Traces */
   if (pcapTracing)
     {
-      std::stringstream ss1, ss2;
+      std::stringstream ss1, ss2, ss3;
       wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
       ss1<<"TI_ns3/"<< LOGNAME_PREFIX <<"_AP";
-      wifiPhy.EnablePcap (ss1.str(), apDevice);
+      wifiPhy.EnablePcap (ss1.str(), apWiFiDevice);
       ss2<<"TI_ns3/"<< LOGNAME_PREFIX <<"_STA";
-      wifiPhy.EnablePcap (ss2.str(), staDevices);
+      wifiPhy.EnablePcap (ss2.str(), staWiFiDevice);
+      ss3<<"TI_ns3/"<< LOGNAME_PREFIX <<"_P2P";
+      pointToPoint.EnablePcapAll (ss3.str());
     }
 
 
@@ -236,6 +264,7 @@ main (int argc, char *argv[])
   AnimationInterface anim("energyModelSim.xml");
   anim.SetConstantPosition(networkNodes.Get(0), 0.0, 0.0);
   anim.SetConstantPosition(networkNodes.Get(1), 10.0, 0.0);
+  anim.SetConstantPosition(networkNodes.Get(2), -100.0, 0.0);
   anim.EnablePacketMetadata(true);
   //******************************************
 
