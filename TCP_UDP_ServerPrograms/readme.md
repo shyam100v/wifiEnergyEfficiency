@@ -1,0 +1,1 @@
+This folder contains the Python source files for TCP/UDP server applications. Make sure the change the server IP address and port number as required. 

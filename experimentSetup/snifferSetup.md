@@ -43,7 +43,7 @@ ip link set wlan1 up
 
 Now, open WireShark - you may need to run wireshark with 'sudo' if it was not configured properly. Select **wlan1** from the list of interfaces and that's all.
 
-* In order to decrypt the packets that you are monitoring, you need the password for the network (if it is encrypted). Follow [this](https://wiki.wireshark.org/HowToDecrypt802.11) tutorial to set it up. Note that *in order to decrypt packets from a specific node, you need to capture the communication from that node right from the authentication and association steps*. 
+* In order to decrypt the packets (from any specific node) that you are monitoring, you need the password for the network (if it is encrypted). Follow [this](https://wiki.wireshark.org/HowToDecrypt802.11) tutorial to set it up. Note that *in order to decrypt packets from a specific node, you need to capture the communication from that node right from the authentication and association steps*. 
 
 
 
