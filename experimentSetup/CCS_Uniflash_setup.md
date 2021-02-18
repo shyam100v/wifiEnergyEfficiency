@@ -26,7 +26,7 @@ To build and burn this project image directly from CCS (without using UniFlash):
 You can use any serial terminal application. Follow these steps:
 
 * Connect the device to your Windows machine. Find the COM port from 'Device manager'. Look for 'XDS110 Class Application/User UART'. In this example, it is COM3.
-* Open serial terminal applicaiton, create a new serial session with following details:
+* Open serial terminal application, create a new serial session with following details:
     * Serial Port as found above
     * Speed (bps) as 115200 bps
 
