@@ -1,1 +1,0 @@
-This folder contains ns3 source files and associated files. 
