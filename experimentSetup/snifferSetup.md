@@ -1,6 +1,6 @@
 # Setting up a network sniffer
 
-Following are the steps to use [this](https://www.alfa.com.tw/products/awus036ach?variant=36473965871176) (Alfa AWUS036ACH) USB Wi-Fi adapter as a Wi-Fi sniffer. The steps are tested on a Ubuntu (16 and above) machine. Refer [here](https://github.com/aircrack-ng/rtl8812au) for more information.
+Following are the steps to use [this](https://www.alfa.com.tw/products/awus036ach?variant=36473965871176) (Alfa AWUS036ACH) USB Wi-Fi adapter as a Wi-Fi sniffer. The steps are tested on a Ubuntu (16 and above) machine. 
 
 * In a terminal window, execute the following commands in order:
 ```BASH
@@ -22,6 +22,7 @@ You should see the new wireless interface. Note down the logical name. In this e
 sudo apt-get update
 sudo apt-get install -y aircrack-ng
 ```
+Refer [here](https://github.com/aircrack-ng/rtl8812au) for more information on airmon-ng.
 
 ## Setting up Monitor mode
 
