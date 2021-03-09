@@ -1,13 +1,5 @@
 /* -*-  Mode: C++; c-file-style: "gnu"; indent-tabs-mode:nil; -*- */
  /*
-  *  * Configuration:
-  * 1. TCP payload size = 1460 bytes - 1 packet per second
-  * 2. Network RTT ~= 10 ms
-  * 3. delayed ACK is disabled for TCP
-  * 4. Short GI has been enabled for all nodes - only applicable for 802.11n
-  * 5. Beacon: Long preamble, 802.11b HR/DSSS - 1 Mbps
-  * 6. TCP Tx - 802.11n 72.2 Mbps - BW = 20 MHz, Short GI
-  * 7. TCP ACK Rx - 802.11b HR/DSSS 1 Mbps
   * Copyright (c) 2015, IMDEA Networks Institute
   *
   * This program is free software; you can redistribute it and/or modify
@@ -56,63 +48,33 @@
  #include "ns3/internet-stack-helper.h"
  #include "ns3/ipv4-address-helper.h"
  #include "ns3/ipv4-global-routing-helper.h"
- //changes below
-  #include "ns3/netanim-module.h"
-  #include "ns3/wifi-module.h"
-  #include "ns3/point-to-point-module.h"
-  //*********************************
-  #define LOGNAME_PREFIX "TCP_NetgearSetup_09March2021"
-  NS_LOG_COMPONENT_DEFINE ("energyModelWiFiTCP");
-  
+ 
+ NS_LOG_COMPONENT_DEFINE ("wifi-tcp");
  
  using namespace ns3;
  
  Ptr<PacketSink> sink;                         /* Pointer to the packet sink application */
  uint64_t lastTotalRx = 0;                     /* The value of the last total received bytes */
  
-//Configurable parameters************************
-uint32_t payloadSize = 1460;                       /* Transport layer payload size in bytes. */
-uint32_t dataPeriod = 1;                       /* Application data period in seconds. */
-uint32_t delACKTimer_ms = 0;                     /* TCP delayed ACK timer in ms   */ 
-uint32_t P2PLinkDelay_ms = 2.5;                  // Set this to be half of the expected RTT
-double simulationTime = 20;                        /* Simulation time in seconds. */
-//*******************************************************************
-
-void
-CalculateThroughput ()
-{
-  // This function has been modified to output the data received every second in Bytes
-  Time now = Simulator::Now ();                                         /* Return the simulator's virtual time. */
-  double currentDataBytes = (sink->GetTotalRx () - lastTotalRx);
-  //double cur = (sink->GetTotalRx () - lastTotalRx) * (double) 8 / 1e5;     /* Convert Application RX Packets to MBits. */
-  //std::cout << now.GetSeconds () << "s: \t" << cur << " Mbit/s" << std::endl;
-  std::cout << now.GetSeconds () << "s: Data received in previous second in Bytes\t" << currentDataBytes << " Bytes" << std::endl;
-  lastTotalRx = sink->GetTotalRx ();
-  Simulator::Schedule (MilliSeconds (1000), &CalculateThroughput);
-}
- // PHY state tracing - check log file
-template <int node>
-void PhyStateTrace (std::string context, Time start, Time duration, WifiPhyState state)
-{
-  std::stringstream ss;
-  ss << "TI_ns3/stateLog_"<<LOGNAME_PREFIX <<"_node_" <<node << ".log";
-
-  static std::fstream f (ss.str ().c_str (), std::ios::out);
-
-  f << Simulator::Now ().GetSeconds () << "    state=" << state << " start=" << start << " duration=" << duration << std::endl;
-}
-
-//*************************************************************************
+ void
+ CalculateThroughput ()
+ {
+   Time now = Simulator::Now ();                                         /* Return the simulator's virtual time. */
+   double cur = (sink->GetTotalRx () - lastTotalRx) * (double) 8 / 1e5;     /* Convert Application RX Packets to MBits. */
+   std::cout << now.GetSeconds () << "s: \t" << cur << " Mbit/s" << std::endl;
+   lastTotalRx = sink->GetTotalRx ();
+   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
+ }
+ 
  int
  main (int argc, char *argv[])
  {
-  uint32_t dataRatebps = payloadSize*8/dataPeriod;  
-  std::string dataRate = std::to_string(dataRatebps) + std::string("bps");
-  //std::string dataRate = "8000bps";                  /* Application layer datarate. */
-  std::string tcpVariant = "TcpNewReno";             /* TCP variant type. */
-  std::string phyRate = "HtMcs7";                    /* Physical layer bitrate. */
-  
-  bool pcapTracing = true;                          /* PCAP Tracing is enabled or not. */
+   uint32_t payloadSize = 1472;                       /* Transport layer payload size in bytes. */
+   std::string dataRate = "100Mbps";                  /* Application layer datarate. */
+   std::string tcpVariant = "TcpNewReno";             /* TCP variant type. */
+   std::string phyRate = "HtMcs7";                    /* Physical layer bitrate. */
+   double simulationTime = 10;                        /* Simulation time in seconds. */
+   bool pcapTracing = false;                          /* PCAP Tracing is enabled or not. */
  
    /* Command line argument parser setup. */
    CommandLine cmd (__FILE__);
@@ -147,12 +109,12 @@ void PhyStateTrace (std::string context, Time start, Time duration, WifiPhyState
  
    WifiMacHelper wifiMac;
    WifiHelper wifiHelper;
-   wifiHelper.SetStandard (WIFI_STANDARD_80211n_2_4GHZ);
+   wifiHelper.SetStandard (WIFI_STANDARD_80211n_5GHZ);
  
    /* Set up Legacy Channel */
    YansWifiChannelHelper wifiChannel;
    wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-   wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel", "Frequency", DoubleValue (2.4e9));
+   wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel", "Frequency", DoubleValue (5e9));
  
    /* Setup Physical Layer */
    YansWifiPhyHelper wifiPhy;
@@ -226,21 +188,12 @@ void PhyStateTrace (std::string context, Time start, Time duration, WifiPhyState
    Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
  
    /* Enable Traces */
-  if (pcapTracing)
-    {
-      std::stringstream ss1, ss2, ss3;
-      wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
-      ss1<<"TI_ns3/"<< LOGNAME_PREFIX <<"_AP";
-      wifiPhy.EnablePcap (ss1.str(), apWiFiDevice);
-      ss2<<"TI_ns3/"<< LOGNAME_PREFIX <<"_STA";
-      wifiPhy.EnablePcap (ss2.str(), staWiFiDevice);
-      ss3<<"TI_ns3/"<< LOGNAME_PREFIX <<"_P2P";
-      pointToPoint.EnablePcapAll (ss3.str());
-    }
-
-
-  // For state tracing
-  Config::Connect ("/NodeList/1/DeviceList/*/Phy/State/State", MakeCallback (&PhyStateTrace<1>));
+   if (pcapTracing)
+     {
+       wifiPhy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
+       wifiPhy.EnablePcap ("AccessPoint", apDevice);
+       wifiPhy.EnablePcap ("Station", staDevices);
+     }
  
    /* Start Simulation */
    Simulator::Stop (Seconds (simulationTime + 1));
